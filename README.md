@@ -1,0 +1,1 @@
+# IA-Generativa---CORTA-Grupo-6
