@@ -33,11 +33,19 @@ Las variables se documentan en `.env.example`. Nunca se versionan credenciales r
 
 ## Estructura
 
-- `server.js`: inicia el servidor HTTP.
-- `src/`: aplicación, reglas de negocio y persistencia.
+- `server.js`: inicia el proceso y gestiona su cierre ordenado.
+- `src/domain/`: modelo inmutable y reglas puras.
+- `src/application/`: services/casos de uso y puertos.
+- `src/presentation/`: controllers, presenters y transporte HTTP.
+- `src/infrastructure/`: repositories JSON/PostgreSQL y adaptadores externos.
+- `src/composition/`: conecta las dependencias en un único punto.
 - `public/`: interfaz web para acortar y consultar estadísticas.
 - `test/`: batería automatizada derivada de `SPEC.md`.
 - `SPEC.md`: contrato funcional y casos borde.
+- `ARCHITECTURE.md`: límites, dirección de dependencias y decisiones internas.
+
+La arquitectura y su regla de dependencias están detalladas en
+[ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## API
 

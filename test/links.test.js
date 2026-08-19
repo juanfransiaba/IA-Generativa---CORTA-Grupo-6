@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { MemoryLinkStore, postJson, startTestServer } = require('./helpers');
+const { MemoryLinkRepository, postJson, startTestServer } = require('./helpers');
 
 test('POST /api/links crea un link válido con fecha y cero clicks', async (t) => {
   const context = await startTestServer({ codes: ['abc123'] });
@@ -12,11 +12,11 @@ test('POST /api/links crea un link válido con fecha y cero clicks', async (t) =
 
   assert.equal(response.status, 201);
   assert.deepEqual(await response.json(), { codigo: 'abc123', corta: '/abc123' });
-  assert.deepEqual(await context.store.findByCode('abc123'), {
-    codigo: 'abc123',
-    url: 'https://example.com/una-ruta?x=1',
-    clicks: 0,
-    creado: '2026-08-18T15:30:00.000Z'
+  assert.deepEqual(await context.linkRepository.findByShortCode('abc123'), {
+    shortCode: 'abc123',
+    originalUrl: 'https://example.com/una-ruta?x=1',
+    clickCount: 0,
+    createdAt: '2026-08-18T15:30:00.000Z'
   });
 });
 
@@ -56,10 +56,10 @@ test('POST /api/links rechaza JSON malformado', async (t) => {
 
 test('una colisión genera otro código y no pisa el link existente', async (t) => {
   const original = {
-    codigo: 'abc123',
-    url: 'https://original.example',
-    clicks: 7,
-    creado: '2026-01-01T00:00:00.000Z'
+    shortCode: 'abc123',
+    originalUrl: 'https://original.example',
+    clickCount: 7,
+    createdAt: '2026-01-01T00:00:00.000Z'
   };
   const context = await startTestServer({
     initialLinks: [original],
@@ -73,21 +73,24 @@ test('una colisión genera otro código y no pisa el link existente', async (t) 
 
   assert.equal(response.status, 201);
   assert.equal((await response.json()).codigo, 'def456');
-  assert.deepEqual(await context.store.findByCode('abc123'), original);
-  assert.equal((await context.store.findByCode('def456')).url, 'https://nuevo.example');
+  assert.deepEqual(await context.linkRepository.findByShortCode('abc123'), original);
+  assert.equal(
+    (await context.linkRepository.findByShortCode('def456')).originalUrl,
+    'https://nuevo.example'
+  );
 });
 
 test('el agotamiento de colisiones responde 503 sin datos parciales', async (t) => {
   const original = {
-    codigo: 'ocupado',
-    url: 'https://original.example',
-    clicks: 0,
-    creado: '2026-01-01T00:00:00.000Z'
+    shortCode: 'ocupado',
+    originalUrl: 'https://original.example',
+    clickCount: 0,
+    createdAt: '2026-01-01T00:00:00.000Z'
   };
-  const store = new MemoryLinkStore([original]);
+  const linkRepository = new MemoryLinkRepository([original]);
   const context = await startTestServer({
-    store,
-    generateCode: () => 'ocupado',
+    linkRepository,
+    shortCodeGenerator: () => 'ocupado',
     maxCodeAttempts: 3
   });
   t.after(context.close);
@@ -97,7 +100,7 @@ test('el agotamiento de colisiones responde 503 sin datos parciales', async (t) 
   });
 
   assert.equal(response.status, 503);
-  assert.deepEqual(await store.findByCode('ocupado'), original);
+  assert.deepEqual(await linkRepository.findByShortCode('ocupado'), original);
 });
 
 test('GET /:codigo incrementa el click y redirige al destino', async (t) => {
@@ -115,7 +118,7 @@ test('GET /:codigo incrementa el click y redirige al destino', async (t) => {
 
   assert.equal(response.status, 302);
   assert.equal(response.headers.get('location'), 'https://example.com/destino');
-  assert.equal((await context.store.findByCode('abc123')).clicks, 1);
+  assert.equal((await context.linkRepository.findByShortCode('abc123')).clickCount, 1);
 });
 
 test('cada redirección exitosa cuenta exactamente una vez', async (t) => {
@@ -132,7 +135,7 @@ test('cada redirección exitosa cuenta exactamente una vez', async (t) => {
   await fetch(`${context.baseUrl}/abc123`, { redirect: 'manual' });
   await fetch(`${context.baseUrl}/abc123`, { redirect: 'manual' });
 
-  assert.equal((await context.store.findByCode('abc123')).clicks, 6);
+  assert.equal((await context.linkRepository.findByShortCode('abc123')).clickCount, 6);
 });
 
 test('un código inexistente responde 404 sin alterar otros links', async (t) => {
@@ -148,5 +151,10 @@ test('un código inexistente responde 404 sin alterar otros links', async (t) =>
   const response = await fetch(`${context.baseUrl}/noexiste`, { redirect: 'manual' });
 
   assert.equal(response.status, 404);
-  assert.deepEqual(await context.store.findByCode('abc123'), original);
+  assert.deepEqual(await context.linkRepository.findByShortCode('abc123'), {
+    shortCode: 'abc123',
+    originalUrl: 'https://example.com',
+    clickCount: 9,
+    createdAt: '2026-01-01T00:00:00.000Z'
+  });
 });

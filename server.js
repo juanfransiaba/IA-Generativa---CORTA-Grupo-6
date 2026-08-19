@@ -1,27 +1,36 @@
 const path = require('node:path');
-const { createApp } = require('./src/app');
-const { createStore } = require('./src/stores/create-store');
+const { createApplication } = require('./src/composition/create-application');
+const {
+  createLinkRepository
+} = require('./src/infrastructure/repositories/create-link-repository');
 
 async function main() {
   const dataFile = process.env.DATA_FILE || path.join(__dirname, 'data', 'links.json');
-  const store = createStore({ dataFile });
-  await store.init();
+  const linkRepository = createLinkRepository({
+    databaseUrl: process.env.DATABASE_URL,
+    dataFile
+  });
+  await linkRepository.initialize();
 
-  const app = createApp({ store });
+  const app = createApplication({ linkRepository });
   const port = Number(process.env.PORT) || 3000;
-  const server = app.listen(port, () => {
+  const httpServer = app.listen(port, () => {
     console.log(`Corta escuchando en http://localhost:${port}`);
   });
 
+  let isShuttingDown = false;
   async function shutdown() {
-    server.close(async () => {
-      if (typeof store.close === 'function') await store.close();
-      process.exit(0);
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+
+    await new Promise((resolve, reject) => {
+      httpServer.close((error) => (error ? reject(error) : resolve()));
     });
+    if (typeof linkRepository.close === 'function') await linkRepository.close();
   }
 
-  process.once('SIGTERM', shutdown);
-  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', () => void shutdown());
+  process.once('SIGINT', () => void shutdown());
 }
 
 main().catch((error) => {

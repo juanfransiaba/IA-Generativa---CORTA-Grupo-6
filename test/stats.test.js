@@ -28,7 +28,7 @@ test('consultar estadísticas no incrementa clicks', async (t) => {
 
   assert.equal(firstResponse.status, 200);
   assert.equal(secondResponse.status, 200);
-  assert.equal((await context.store.findByCode('abc123')).clicks, 7);
+  assert.equal((await context.linkRepository.findByShortCode('abc123')).clickCount, 7);
 });
 
 test('las estadísticas reflejan las redirecciones confirmadas', async (t) => {

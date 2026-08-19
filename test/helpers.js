@@ -1,49 +1,64 @@
-const { createApp } = require('../src/app');
+const { createApplication } = require('../src/composition/create-application');
+const { ShortCodeCollisionError } = require('../src/domain/errors');
+const { toImmutableShortLink } = require('../src/domain/short-link');
 
-class MemoryLinkStore {
+function normalizeTestLink(link) {
+  return toImmutableShortLink({
+    shortCode: link.shortCode ?? link.codigo,
+    originalUrl: link.originalUrl ?? link.url,
+    clickCount: link.clickCount ?? link.clicks,
+    createdAt: link.createdAt ?? link.creado
+  });
+}
+
+class MemoryLinkRepository {
   constructor(initialLinks = []) {
-    this.links = new Map(initialLinks.map((link) => [link.codigo, { ...link }]));
+    const immutableLinks = initialLinks.map(normalizeTestLink);
+    this.links = new Map(immutableLinks.map((link) => [link.shortCode, link]));
   }
 
-  async init() {}
+  async initialize() {}
 
-  async create(link) {
-    if (this.links.has(link.codigo)) {
-      const error = new Error('El código ya existe');
-      error.code = 'DUPLICATE_CODE';
-      throw error;
-    }
+  async save(shortLink) {
+    if (this.links.has(shortLink.shortCode)) throw new ShortCodeCollisionError();
 
-    this.links.set(link.codigo, { ...link });
-    return { ...link };
+    const immutableLink = toImmutableShortLink(shortLink);
+    this.links.set(immutableLink.shortCode, immutableLink);
+    return immutableLink;
   }
 
-  async findByCode(codigo) {
-    const link = this.links.get(codigo);
-    return link ? { ...link } : null;
+  async findByShortCode(shortCode) {
+    return this.links.get(shortCode) || null;
   }
 
-  async incrementClicks(codigo) {
-    const link = this.links.get(codigo);
-    if (!link) return null;
-    link.clicks += 1;
-    return { ...link };
+  async incrementClickCount(shortCode) {
+    const currentLink = this.links.get(shortCode);
+    if (!currentLink) return null;
+
+    const updatedLink = toImmutableShortLink({
+      ...currentLink,
+      clickCount: currentLink.clickCount + 1
+    });
+    this.links.set(shortCode, updatedLink);
+    return updatedLink;
   }
 }
 
 async function startTestServer(options = {}) {
-  const store = options.store || new MemoryLinkStore(options.initialLinks);
+  const linkRepository = options.linkRepository
+    || new MemoryLinkRepository(options.initialLinks);
   const codes = [...(options.codes || ['abc123'])];
-  const generateCode = options.generateCode || (() => codes.shift() || 'abc123');
-  const now = options.now || (() => new Date('2026-08-18T15:30:00.000Z'));
-  const app = createApp({
-    store,
-    generateCode,
-    now,
+  const shortCodeGenerator = options.shortCodeGenerator
+    || (() => codes.shift() || 'abc123');
+  const clock = options.clock || (() => new Date('2026-08-18T15:30:00.000Z'));
+  const app = createApplication({
+    linkRepository,
+    shortCodeGenerator,
+    clock,
     maxCodeAttempts: options.maxCodeAttempts
   });
 
-  await store.init();
+  await linkRepository.initialize();
   const server = await new Promise((resolve) => {
     const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
   });
@@ -51,7 +66,7 @@ async function startTestServer(options = {}) {
 
   return {
     baseUrl: `http://127.0.0.1:${address.port}`,
-    store,
+    linkRepository,
     close: () => new Promise((resolve, reject) => {
       server.close((error) => (error ? reject(error) : resolve()));
     })
@@ -67,4 +82,4 @@ async function postJson(baseUrl, path, body) {
   });
 }
 
-module.exports = { MemoryLinkStore, postJson, startTestServer };
+module.exports = { MemoryLinkRepository, postJson, startTestServer };

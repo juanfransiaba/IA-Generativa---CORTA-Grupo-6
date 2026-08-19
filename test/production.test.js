@@ -1,8 +1,14 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { createStore } = require('../src/stores/create-store');
-const { JsonLinkStore } = require('../src/stores/json-link-store');
-const { PostgresLinkStore } = require('../src/stores/postgres-link-store');
+const {
+  createLinkRepository
+} = require('../src/infrastructure/repositories/create-link-repository');
+const {
+  JsonLinkRepository
+} = require('../src/infrastructure/repositories/json-link-repository');
+const {
+  PostgresLinkRepository
+} = require('../src/infrastructure/repositories/postgres-link-repository');
 const { startTestServer } = require('./helpers');
 
 class FakePool {
@@ -19,25 +25,28 @@ class FakePool {
   }
 }
 
-test('createStore usa JSON local cuando DATABASE_URL no existe', () => {
-  const store = createStore({ databaseUrl: '', dataFile: 'data/test-links.json' });
-  assert.ok(store instanceof JsonLinkStore);
+test('createLinkRepository usa JSON local cuando DATABASE_URL no existe', () => {
+  const repository = createLinkRepository({
+    databaseUrl: '',
+    dataFile: 'data/test-links.json'
+  });
+  assert.ok(repository instanceof JsonLinkRepository);
 });
 
-test('createStore usa PostgreSQL cuando DATABASE_URL existe', () => {
+test('createLinkRepository usa PostgreSQL cuando DATABASE_URL existe', () => {
   const pool = new FakePool();
-  const store = createStore({
-    databaseUrl: 'postgresql://user:secret@db.example/corta',
+  const repository = createLinkRepository({
+    databaseUrl: 'configured-by-environment',
     pool
   });
-  assert.ok(store instanceof PostgresLinkStore);
+  assert.ok(repository instanceof PostgresLinkRepository);
 });
 
-test('PostgresLinkStore inicializa un esquema idempotente con código único', async () => {
+test('PostgresLinkRepository inicializa un esquema idempotente con código único', async () => {
   const pool = new FakePool();
-  const store = new PostgresLinkStore({ pool });
+  const repository = new PostgresLinkRepository({ pool });
 
-  await store.init();
+  await repository.initialize();
 
   assert.equal(pool.calls.length, 1);
   assert.match(pool.calls[0].text, /CREATE TABLE IF NOT EXISTS links/i);
@@ -45,37 +54,37 @@ test('PostgresLinkStore inicializa un esquema idempotente con código único', a
   assert.match(pool.calls[0].text, /clicks\s+INTEGER/i);
 });
 
-test('PostgresLinkStore traduce una violación unique a DUPLICATE_CODE', async () => {
+test('PostgresLinkRepository traduce una violación unique a error de dominio', async () => {
   const duplicate = new Error('duplicate key');
   duplicate.code = '23505';
-  const store = new PostgresLinkStore({ pool: new FakePool([duplicate]) });
+  const repository = new PostgresLinkRepository({ pool: new FakePool([duplicate]) });
 
   await assert.rejects(
-    store.create({
-      codigo: 'abc123',
-      url: 'https://example.com',
-      clicks: 0,
-      creado: '2026-08-18T15:30:00.000Z'
+    repository.save({
+      shortCode: 'abc123',
+      originalUrl: 'https://example.com',
+      clickCount: 0,
+      createdAt: '2026-08-18T15:30:00.000Z'
     }),
-    (error) => error.code === 'DUPLICATE_CODE'
+    (error) => error.name === 'ShortCodeCollisionError'
   );
 });
 
-test('PostgresLinkStore incrementa clicks con una sola operación atómica', async () => {
+test('PostgresLinkRepository incrementa clicks con una sola operación atómica', async () => {
   const pool = new FakePool([{ rows: [{
     codigo: 'abc123',
     url: 'https://example.com',
     clicks: 4,
     creado: new Date('2026-08-18T15:30:00.000Z')
   }] }]);
-  const store = new PostgresLinkStore({ pool });
+  const repository = new PostgresLinkRepository({ pool });
 
-  const updated = await store.incrementClicks('abc123');
+  const updated = await repository.incrementClickCount('abc123');
 
   assert.match(pool.calls[0].text, /SET clicks = clicks \+ 1/i);
   assert.match(pool.calls[0].text, /RETURNING/i);
-  assert.equal(updated.clicks, 4);
-  assert.equal(updated.creado, '2026-08-18T15:30:00.000Z');
+  assert.equal(updated.clickCount, 4);
+  assert.equal(updated.createdAt, '2026-08-18T15:30:00.000Z');
 });
 
 test('GET /health confirma que la aplicación está lista', async (t) => {
