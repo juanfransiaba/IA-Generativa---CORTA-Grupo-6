@@ -2,6 +2,12 @@
 
 Corta es un acortador de URLs interno. Este repositorio conserva el estado heredado en el commit `5601e92` y documenta su evolución desde una carpeta desordenada hasta una aplicación probada y desplegable.
 
+## Producción
+
+- Aplicación: https://ia-generativa-corta-grupo-6-production.up.railway.app
+- Infraestructura: servicio Node.js y PostgreSQL administrados por Railway.
+- Persistencia verificada: los links y sus clicks sobreviven a un redeploy.
+
 ## Requisitos
 
 - Node.js 20 o superior
