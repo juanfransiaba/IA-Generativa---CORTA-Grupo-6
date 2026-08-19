@@ -1,6 +1,6 @@
 # Corta
 
-Corta es un acortador de URLs interno. Este repositorio conserva el estado heredado en el commit `5601e92` y documenta su evolución desde una carpeta desordenada hasta una aplicación probada y desplegable.
+Corta es un acortador de URLs interno. El primer commit conserva el estado heredado y documenta su evolución desde una carpeta desordenada hasta una aplicación probada y desplegable.
 
 ## Producción
 
