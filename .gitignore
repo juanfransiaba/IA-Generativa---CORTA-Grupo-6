@@ -1,0 +1,9 @@
+node_modules/
+.idea/
+.env
+.env.*
+!.env.example
+coverage/
+data/*.json
+!data/.gitkeep
+npm-debug.log*
