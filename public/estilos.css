@@ -74,7 +74,19 @@ button:hover { background: #b5161f; }
 
 .numero { font-size: 1.4rem; font-weight: 700; color: #1f1e1e; }
 
+.valor {
+  color: #1f1e1e;
+  font-size: 0.82rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
 .etiqueta { font-size: 0.8rem; color: #6b6560; }
+
+.error {
+  color: #9f1420;
+  margin-top: 18px;
+}
 
 .pie { margin-top: 28px; font-size: 0.9rem; }
 

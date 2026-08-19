@@ -66,6 +66,20 @@ function createApp(options = {}) {
     });
   }));
 
+  app.get('/api/links/:codigo/stats', asyncRoute(async (request, response) => {
+    const link = await store.findByCode(request.params.codigo);
+    if (!link) {
+      return response.status(404).json({ error: 'Link no encontrado' });
+    }
+
+    return response.json({
+      codigo: link.codigo,
+      url: link.url,
+      clicks: link.clicks,
+      creado: link.creado
+    });
+  }));
+
   app.use(express.static(publicDir));
 
   app.get('/:codigo', asyncRoute(async (request, response) => {

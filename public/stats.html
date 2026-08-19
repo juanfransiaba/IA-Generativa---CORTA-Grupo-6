@@ -16,14 +16,56 @@
       <button type="submit">Buscar</button>
     </form>
 
-    <!-- maqueta: datos de mentira, falta conectar con el server -->
-    <div class="stats">
-      <div class="stat"><span class="numero">123</span><span class="etiqueta">clicks</span></div>
-      <div class="stat"><span class="numero">-</span><span class="etiqueta">URL original</span></div>
-      <div class="stat"><span class="numero">-</span><span class="etiqueta">creado el</span></div>
+    <p id="stats-error" class="error oculto" role="alert"></p>
+
+    <div id="stats-resultado" class="stats oculto" aria-live="polite">
+      <div class="stat">
+        <span id="stats-clicks" class="numero">0</span>
+        <span class="etiqueta">clicks</span>
+      </div>
+      <div class="stat">
+        <a id="stats-url" class="valor" href="#" target="_blank" rel="noreferrer"></a>
+        <span class="etiqueta">URL original</span>
+      </div>
+      <div class="stat">
+        <time id="stats-creado" class="valor"></time>
+        <span class="etiqueta">creado el</span>
+      </div>
     </div>
 
     <p class="pie"><a href="index.html">Volver a acortar</a></p>
   </main>
+
+  <script>
+    const form = document.getElementById('form-stats');
+    const resultado = document.getElementById('stats-resultado');
+    const errorElement = document.getElementById('stats-error');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const codigo = document.getElementById('codigo').value.trim();
+      resultado.classList.add('oculto');
+      errorElement.classList.add('oculto');
+
+      try {
+        const response = await fetch(`/api/links/${encodeURIComponent(codigo)}/stats`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'No se pudieron cargar las estadísticas');
+
+        document.getElementById('stats-clicks').textContent = data.clicks;
+        const urlElement = document.getElementById('stats-url');
+        urlElement.textContent = data.url;
+        urlElement.href = data.url;
+
+        const creadoElement = document.getElementById('stats-creado');
+        creadoElement.dateTime = data.creado;
+        creadoElement.textContent = new Date(data.creado).toLocaleString('es-AR');
+        resultado.classList.remove('oculto');
+      } catch (error) {
+        errorElement.textContent = error.message;
+        errorElement.classList.remove('oculto');
+      }
+    });
+  </script>
 </body>
 </html>
