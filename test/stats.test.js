@@ -29,7 +29,7 @@ test('consultar estadísticas no incrementa clicks', async (t) => {
   assert.equal(firstResponse.status, 200);
   assert.equal(secondResponse.status, 200);
   assert.equal(
-    (await context.linkRepository.findByShortCode('abc123')).value.clickCount,
+    (await context.linkRepository.findByShortCode('abc123')).clickCount,
     7
   );
 });

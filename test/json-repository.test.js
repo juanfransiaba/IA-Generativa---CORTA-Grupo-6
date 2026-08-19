@@ -3,10 +3,9 @@ const fileSystem = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
-const { FailureReason } = require('../src/application/result');
 const {
   JsonLinkRepository
-} = require('../src/infrastructure/repositories/json-link-repository');
+} = require('../src/repositories/json-link-repository');
 
 async function temporaryRepository(t) {
   const directory = await fileSystem.mkdtemp(path.join(os.tmpdir(), 'corta-test-'));
@@ -32,25 +31,20 @@ test('JsonLinkRepository conserva links y clicks después de reiniciarse', async
   const restartedRepository = new JsonLinkRepository(filePath);
   await restartedRepository.initialize();
 
-  const result = await restartedRepository.findByShortCode('abc123');
-  assert.equal(result.ok, true);
-  assert.equal(result.value.clickCount, 1);
+  assert.equal((await restartedRepository.findByShortCode('abc123')).clickCount, 1);
 });
 
 test('JsonLinkRepository rechaza códigos duplicados sin sobrescribir', async (t) => {
   const { repository } = await temporaryRepository(t);
   await repository.save(link);
 
-  const duplicateResult = await repository.save({
+  const wasSaved = await repository.save({
     ...link,
     originalUrl: 'https://otra.example'
   });
-  assert.deepEqual(duplicateResult, {
-    ok: false,
-    reason: FailureReason.SHORT_CODE_COLLISION
-  });
+  assert.equal(wasSaved, false);
   assert.equal(
-    (await repository.findByShortCode('abc123')).value.originalUrl,
+    (await repository.findByShortCode('abc123')).originalUrl,
     'https://example.com'
   );
 });
@@ -64,7 +58,7 @@ test('JsonLinkRepository no pierde clicks concurrentes', async (t) => {
   );
 
   assert.equal(
-    (await repository.findByShortCode('abc123')).value.clickCount,
+    (await repository.findByShortCode('abc123')).clickCount,
     25
   );
 });

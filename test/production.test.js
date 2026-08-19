@@ -1,15 +1,14 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { FailureReason } = require('../src/application/result');
 const {
   createLinkRepository
-} = require('../src/infrastructure/repositories/create-link-repository');
+} = require('../src/repositories/create-link-repository');
 const {
   JsonLinkRepository
-} = require('../src/infrastructure/repositories/json-link-repository');
+} = require('../src/repositories/json-link-repository');
 const {
   PostgresLinkRepository
-} = require('../src/infrastructure/repositories/postgres-link-repository');
+} = require('../src/repositories/postgres-link-repository');
 const { startTestServer } = require('./helpers');
 
 class FakePool {
@@ -55,7 +54,7 @@ test('PostgresLinkRepository inicializa un esquema idempotente con código únic
   assert.match(pool.calls[0].text, /clicks\s+INTEGER/i);
 });
 
-test('PostgresLinkRepository traduce una violación unique a Result de colisión', async () => {
+test('PostgresLinkRepository traduce una violación unique a una colisión', async () => {
   const duplicate = new Error('duplicate key');
   duplicate.code = '23505';
   const repository = new PostgresLinkRepository({ pool: new FakePool([duplicate]) });
@@ -67,10 +66,7 @@ test('PostgresLinkRepository traduce una violación unique a Result de colisión
     createdAt: '2026-08-18T15:30:00.000Z'
   });
 
-  assert.deepEqual(result, {
-    ok: false,
-    reason: FailureReason.SHORT_CODE_COLLISION
-  });
+  assert.equal(result, false);
 });
 
 test('PostgresLinkRepository parametriza todos los datos del INSERT', async () => {
@@ -91,7 +87,7 @@ test('PostgresLinkRepository parametriza todos los datos del INSERT', async () =
     createdAt: '2026-08-18T15:30:00.000Z'
   });
 
-  assert.equal(result.ok, true);
+  assert.equal(result, true);
   assert.match(pool.calls[0].text, /VALUES\s*\(\$1, \$2, \$3, \$4\)/i);
   assert.doesNotMatch(pool.calls[0].text, /DROP TABLE/i);
   assert.deepEqual(pool.calls[0].values, [
@@ -109,10 +105,7 @@ test('PostgresLinkRepository parametriza el código del SELECT', async () => {
 
   const result = await repository.findByShortCode(untrustedCode);
 
-  assert.deepEqual(result, {
-    ok: false,
-    reason: FailureReason.SHORT_LINK_NOT_FOUND
-  });
+  assert.equal(result, null);
   assert.match(pool.calls[0].text, /WHERE codigo = \$1/i);
   assert.doesNotMatch(pool.calls[0].text, /OR '1'='1/i);
   assert.deepEqual(pool.calls[0].values, [untrustedCode]);
@@ -134,9 +127,8 @@ test('PostgresLinkRepository incrementa clicks con una sola operación atómica'
   assert.match(pool.calls[0].text, /WHERE codigo = \$1/i);
   assert.doesNotMatch(pool.calls[0].text, /abc123/);
   assert.deepEqual(pool.calls[0].values, ['abc123']);
-  assert.equal(updated.ok, true);
-  assert.equal(updated.value.clickCount, 4);
-  assert.equal(updated.value.createdAt, '2026-08-18T15:30:00.000Z');
+  assert.equal(updated.clickCount, 4);
+  assert.equal(updated.createdAt, '2026-08-18T15:30:00.000Z');
 });
 
 test('GET /health confirma que la aplicación está lista', async (t) => {

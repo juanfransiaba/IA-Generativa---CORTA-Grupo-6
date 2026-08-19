@@ -1,8 +1,7 @@
 const { Pool } = require('pg');
-const { FailureReason, failure, success } = require('../../application/result');
-const { toImmutableShortLink } = require('../../domain/short-link');
+const { toImmutableShortLink } = require('../short-link');
 
-function normalizeDatabaseRow(row) {
+function normalizeRow(row) {
   if (!row) return null;
   const createdAt = row.creado instanceof Date
     ? row.creado.toISOString()
@@ -34,10 +33,9 @@ class PostgresLinkRepository {
 
   async save(shortLink) {
     try {
-      const result = await this.pool.query(
+      await this.pool.query(
         `INSERT INTO links (codigo, url, clicks, creado)
-         VALUES ($1, $2, $3, $4)
-         RETURNING codigo, url, clicks, creado`,
+         VALUES ($1, $2, $3, $4)`,
         [
           shortLink.shortCode,
           shortLink.originalUrl,
@@ -45,11 +43,9 @@ class PostgresLinkRepository {
           shortLink.createdAt
         ]
       );
-      return success(normalizeDatabaseRow(result.rows[0]));
+      return true;
     } catch (error) {
-      if (error.code === '23505') {
-        return failure(FailureReason.SHORT_CODE_COLLISION);
-      }
+      if (error.code === '23505') return false;
       throw error;
     }
   }
@@ -59,10 +55,7 @@ class PostgresLinkRepository {
       'SELECT codigo, url, clicks, creado FROM links WHERE codigo = $1',
       [shortCode]
     );
-    const shortLink = normalizeDatabaseRow(result.rows[0]);
-    return shortLink
-      ? success(shortLink)
-      : failure(FailureReason.SHORT_LINK_NOT_FOUND);
+    return normalizeRow(result.rows[0]);
   }
 
   async incrementClickCount(shortCode) {
@@ -73,10 +66,7 @@ class PostgresLinkRepository {
        RETURNING codigo, url, clicks, creado`,
       [shortCode]
     );
-    const shortLink = normalizeDatabaseRow(result.rows[0]);
-    return shortLink
-      ? success(shortLink)
-      : failure(FailureReason.SHORT_LINK_NOT_FOUND);
+    return normalizeRow(result.rows[0]);
   }
 
   async close() {
@@ -84,4 +74,4 @@ class PostgresLinkRepository {
   }
 }
 
-module.exports = { PostgresLinkRepository, normalizeDatabaseRow };
+module.exports = { PostgresLinkRepository };

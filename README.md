@@ -34,11 +34,12 @@ Las variables se documentan en `.env.example`. Nunca se versionan credenciales r
 ## Estructura
 
 - `server.js`: inicia el proceso y gestiona su cierre ordenado.
-- `src/domain/`: modelo inmutable y reglas puras.
-- `src/application/`: services/casos de uso y puertos.
-- `src/presentation/`: controllers, presenters y transporte HTTP.
-- `src/infrastructure/`: repositories JSON/PostgreSQL y adaptadores externos.
-- `src/composition/`: conecta las dependencias en un único punto.
+- `src/app.js`: configura Express, rutas y manejo de errores.
+- `src/link-controller.js`: traduce entre HTTP y los casos de uso.
+- `src/link-service.js`: concentra las reglas del acortador.
+- `src/repositories/`: persistencia JSON y PostgreSQL.
+- `src/short-link.js`: modelo inmutable y normalización de URLs.
+- `src/generate-short-code.js`: generación aleatoria de códigos.
 - `public/`: interfaz web para acortar y consultar estadísticas.
 - `test/`: batería automatizada derivada de `SPEC.md`.
 - `SPEC.md`: contrato funcional y casos borde.

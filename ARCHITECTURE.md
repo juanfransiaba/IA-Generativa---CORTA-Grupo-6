@@ -1,51 +1,28 @@
 # Arquitectura de Corta
 
-Corta usa una arquitectura por capas liviana. La separación busca que las reglas del
-acortador puedan probarse sin Express, PostgreSQL ni el sistema de archivos.
-
-## Regla de dependencias
-
-Las dependencias apuntan hacia el dominio:
+Corta separa responsabilidades sin intentar implementar una arquitectura empresarial.
+Cada carpeta representa un límite concreto:
 
 ```text
-server.js
-    │
-    ▼
-composition ─────► presentation
-    │                  │
-    ├────────────► application ─────► domain
-    │                  ▲
-    └────────────► infrastructure ───┘
+server.js → app.js → link-controller.js → link-service.js → repository
 ```
 
-- `domain/`: modelo inmutable y normalización pura. No conoce otras capas.
-- `application/`: casos de uso y el contrato que debe cumplir un repositorio. No conoce
-  Express, archivos, PostgreSQL ni variables de entorno.
-- `presentation/`: controllers, presenters, rutas y manejo de errores HTTP. Convierte el
-  contrato externo en llamadas a casos de uso, sin implementar reglas de negocio.
-- `infrastructure/`: adaptadores JSON/PostgreSQL y generación aleatoria de códigos.
-- `composition/`: único lugar que instancia servicios y controllers y conecta dependencias.
-- `server.js`: arranque, configuración del proceso y cierre ordenado.
+- `link-controller.js`: traduce HTTP a llamadas del service y arma las respuestas.
+- `link-service.js`: contiene validación, creación, colisiones, estadísticas y resolución.
+- `repositories/`: implementa persistencia JSON o PostgreSQL sin conocer HTTP.
+- `app.js`: conecta las dependencias y declara rutas y middleware de Express.
+- `server.js`: lee el entorno, elige persistencia e inicia/cierra el proceso.
+- `short-link.js` y `generate-short-code.js`: helpers puros y pequeños.
 
-`test/architecture.test.js` protege esta dirección y falla si una capa interna comienza a
-importar una capa externa.
+El controller no consulta datos directamente. El service depende únicamente del contrato
+mínimo del repository (`save`, `findByShortCode`, `incrementClickCount`) y no conoce
+Express, archivos ni SQL. Los repositories reciben valores del service y las consultas a
+PostgreSQL usan parámetros posicionales.
 
-## Límites de datos
+Los resultados esperables —URL inválida, código inexistente o agotamiento de colisiones—
+se devuelven como valores `{ ok, value/reason }`; no se lanzan como excepciones. Los links
+son objetos inmutables.
 
-El modelo interno usa nombres explícitos (`shortCode`, `originalUrl`, `clickCount`,
-`createdAt`) y se congela con `Object.freeze`. Los presenters traducen ese modelo al
-contrato público en español. Los repositories traducen el modelo a JSON o a las columnas
-heredadas de PostgreSQL, por lo que el dominio no depende del formato de persistencia.
-
-Los resultados esperables se representan con un `Result` inmutable: `{ ok: true, value }`
-o `{ ok: false, reason }`. Una URL inválida, un código inexistente o una colisión agotada
-no lanzan excepciones. Las excepciones quedan reservadas para errores de programación o
-fallas inesperadas de infraestructura y se traducen en el borde HTTP.
-
-## Secretos
-
-La aplicación sólo recibe la conexión mediante `process.env.DATABASE_URL` en el punto de
-entrada. El reloj (que entrega ISO 8601), el generador aleatorio y el logger también se
-inyectan desde `server.js`.
-La composición y las capas internas no leen variables globales ni registran el valor de la
-conexión. Railway resuelve la referencia al servicio PostgreSQL fuera del repositorio.
+Los efectos quedan en los bordes: variables de entorno, reloj y logging en `server.js`;
+HTTP en `app.js` y el controller; azar en `generate-short-code.js`; archivos y base de datos
+en `repositories/`. `DATABASE_URL` sólo se lee en el arranque y nunca se registra.

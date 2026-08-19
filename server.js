@@ -1,11 +1,9 @@
 const path = require('node:path');
-const { createApplication } = require('./src/composition/create-application');
+const { createApp } = require('./src/app');
 const {
   createLinkRepository
-} = require('./src/infrastructure/repositories/create-link-repository');
-const {
-  generateRandomShortCode
-} = require('./src/infrastructure/random/generate-random-short-code');
+} = require('./src/repositories/create-link-repository');
+const { generateShortCode } = require('./src/generate-short-code');
 
 async function main() {
   const dataFile = process.env.DATA_FILE || path.join(__dirname, 'data', 'links.json');
@@ -15,9 +13,9 @@ async function main() {
   });
   await linkRepository.initialize();
 
-  const app = createApplication({
+  const app = createApp({
     linkRepository,
-    shortCodeGenerator: generateRandomShortCode,
+    generateCode: generateShortCode,
     clock: () => new Date().toISOString(),
     logger: console
   });

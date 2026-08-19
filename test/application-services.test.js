@@ -3,7 +3,7 @@ const test = require('node:test');
 const {
   FailureReason,
   LinkService
-} = require('../src/services/link-service');
+} = require('../src/link-service');
 
 class RepositorySpy {
   constructor() {
