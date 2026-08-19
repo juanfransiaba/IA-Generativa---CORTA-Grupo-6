@@ -12,7 +12,7 @@ test('POST /api/links crea un link válido con fecha y cero clicks', async (t) =
 
   assert.equal(response.status, 201);
   assert.deepEqual(await response.json(), { codigo: 'abc123', corta: '/abc123' });
-  assert.deepEqual(await context.linkRepository.findByShortCode('abc123'), {
+  assert.deepEqual((await context.linkRepository.findByShortCode('abc123')).value, {
     shortCode: 'abc123',
     originalUrl: 'https://example.com/una-ruta?x=1',
     clickCount: 0,
@@ -73,9 +73,12 @@ test('una colisión genera otro código y no pisa el link existente', async (t) 
 
   assert.equal(response.status, 201);
   assert.equal((await response.json()).codigo, 'def456');
-  assert.deepEqual(await context.linkRepository.findByShortCode('abc123'), original);
+  assert.deepEqual(
+    (await context.linkRepository.findByShortCode('abc123')).value,
+    original
+  );
   assert.equal(
-    (await context.linkRepository.findByShortCode('def456')).originalUrl,
+    (await context.linkRepository.findByShortCode('def456')).value.originalUrl,
     'https://nuevo.example'
   );
 });
@@ -100,7 +103,7 @@ test('el agotamiento de colisiones responde 503 sin datos parciales', async (t) 
   });
 
   assert.equal(response.status, 503);
-  assert.deepEqual(await linkRepository.findByShortCode('ocupado'), original);
+  assert.deepEqual((await linkRepository.findByShortCode('ocupado')).value, original);
 });
 
 test('GET /:codigo incrementa el click y redirige al destino', async (t) => {
@@ -118,7 +121,10 @@ test('GET /:codigo incrementa el click y redirige al destino', async (t) => {
 
   assert.equal(response.status, 302);
   assert.equal(response.headers.get('location'), 'https://example.com/destino');
-  assert.equal((await context.linkRepository.findByShortCode('abc123')).clickCount, 1);
+  assert.equal(
+    (await context.linkRepository.findByShortCode('abc123')).value.clickCount,
+    1
+  );
 });
 
 test('cada redirección exitosa cuenta exactamente una vez', async (t) => {
@@ -135,7 +141,10 @@ test('cada redirección exitosa cuenta exactamente una vez', async (t) => {
   await fetch(`${context.baseUrl}/abc123`, { redirect: 'manual' });
   await fetch(`${context.baseUrl}/abc123`, { redirect: 'manual' });
 
-  assert.equal((await context.linkRepository.findByShortCode('abc123')).clickCount, 6);
+  assert.equal(
+    (await context.linkRepository.findByShortCode('abc123')).value.clickCount,
+    6
+  );
 });
 
 test('un código inexistente responde 404 sin alterar otros links', async (t) => {
@@ -151,7 +160,7 @@ test('un código inexistente responde 404 sin alterar otros links', async (t) =>
   const response = await fetch(`${context.baseUrl}/noexiste`, { redirect: 'manual' });
 
   assert.equal(response.status, 404);
-  assert.deepEqual(await context.linkRepository.findByShortCode('abc123'), {
+  assert.deepEqual((await context.linkRepository.findByShortCode('abc123')).value, {
     shortCode: 'abc123',
     originalUrl: 'https://example.com',
     clickCount: 9,

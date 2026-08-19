@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
+const { FailureReason } = require('../src/application/result');
 const {
   createLinkRepository
 } = require('../src/infrastructure/repositories/create-link-repository');
@@ -54,20 +55,67 @@ test('PostgresLinkRepository inicializa un esquema idempotente con código únic
   assert.match(pool.calls[0].text, /clicks\s+INTEGER/i);
 });
 
-test('PostgresLinkRepository traduce una violación unique a error de dominio', async () => {
+test('PostgresLinkRepository traduce una violación unique a Result de colisión', async () => {
   const duplicate = new Error('duplicate key');
   duplicate.code = '23505';
   const repository = new PostgresLinkRepository({ pool: new FakePool([duplicate]) });
 
-  await assert.rejects(
-    repository.save({
-      shortCode: 'abc123',
-      originalUrl: 'https://example.com',
-      clickCount: 0,
-      createdAt: '2026-08-18T15:30:00.000Z'
-    }),
-    (error) => error.name === 'ShortCodeCollisionError'
-  );
+  const result = await repository.save({
+    shortCode: 'abc123',
+    originalUrl: 'https://example.com',
+    clickCount: 0,
+    createdAt: '2026-08-18T15:30:00.000Z'
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    reason: FailureReason.SHORT_CODE_COLLISION
+  });
+});
+
+test('PostgresLinkRepository parametriza todos los datos del INSERT', async () => {
+  const originalUrl = "https://example.com/?q='; DROP TABLE links; --";
+  const row = {
+    codigo: 'abc123',
+    url: originalUrl,
+    clicks: 0,
+    creado: new Date('2026-08-18T15:30:00.000Z')
+  };
+  const pool = new FakePool([{ rows: [row] }]);
+  const repository = new PostgresLinkRepository({ pool });
+
+  const result = await repository.save({
+    shortCode: 'abc123',
+    originalUrl,
+    clickCount: 0,
+    createdAt: '2026-08-18T15:30:00.000Z'
+  });
+
+  assert.equal(result.ok, true);
+  assert.match(pool.calls[0].text, /VALUES\s*\(\$1, \$2, \$3, \$4\)/i);
+  assert.doesNotMatch(pool.calls[0].text, /DROP TABLE/i);
+  assert.deepEqual(pool.calls[0].values, [
+    'abc123',
+    originalUrl,
+    0,
+    '2026-08-18T15:30:00.000Z'
+  ]);
+});
+
+test('PostgresLinkRepository parametriza el código del SELECT', async () => {
+  const untrustedCode = "abc' OR '1'='1";
+  const pool = new FakePool([{ rows: [] }]);
+  const repository = new PostgresLinkRepository({ pool });
+
+  const result = await repository.findByShortCode(untrustedCode);
+
+  assert.deepEqual(result, {
+    ok: false,
+    reason: FailureReason.SHORT_LINK_NOT_FOUND
+  });
+  assert.match(pool.calls[0].text, /WHERE codigo = \$1/i);
+  assert.doesNotMatch(pool.calls[0].text, /OR '1'='1/i);
+  assert.deepEqual(pool.calls[0].values, [untrustedCode]);
 });
 
 test('PostgresLinkRepository incrementa clicks con una sola operación atómica', async () => {
@@ -83,8 +131,9 @@ test('PostgresLinkRepository incrementa clicks con una sola operación atómica'
 
   assert.match(pool.calls[0].text, /SET clicks = clicks \+ 1/i);
   assert.match(pool.calls[0].text, /RETURNING/i);
-  assert.equal(updated.clickCount, 4);
-  assert.equal(updated.createdAt, '2026-08-18T15:30:00.000Z');
+  assert.equal(updated.ok, true);
+  assert.equal(updated.value.clickCount, 4);
+  assert.equal(updated.value.createdAt, '2026-08-18T15:30:00.000Z');
 });
 
 test('GET /health confirma que la aplicación está lista', async (t) => {

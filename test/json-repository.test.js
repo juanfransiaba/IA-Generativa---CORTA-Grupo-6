@@ -3,6 +3,7 @@ const fileSystem = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const { FailureReason } = require('../src/application/result');
 const {
   JsonLinkRepository
 } = require('../src/infrastructure/repositories/json-link-repository');
@@ -31,19 +32,25 @@ test('JsonLinkRepository conserva links y clicks después de reiniciarse', async
   const restartedRepository = new JsonLinkRepository(filePath);
   await restartedRepository.initialize();
 
-  assert.equal((await restartedRepository.findByShortCode('abc123')).clickCount, 1);
+  const result = await restartedRepository.findByShortCode('abc123');
+  assert.equal(result.ok, true);
+  assert.equal(result.value.clickCount, 1);
 });
 
 test('JsonLinkRepository rechaza códigos duplicados sin sobrescribir', async (t) => {
   const { repository } = await temporaryRepository(t);
   await repository.save(link);
 
-  await assert.rejects(
-    repository.save({ ...link, originalUrl: 'https://otra.example' }),
-    (error) => error.name === 'ShortCodeCollisionError'
-  );
+  const duplicateResult = await repository.save({
+    ...link,
+    originalUrl: 'https://otra.example'
+  });
+  assert.deepEqual(duplicateResult, {
+    ok: false,
+    reason: FailureReason.SHORT_CODE_COLLISION
+  });
   assert.equal(
-    (await repository.findByShortCode('abc123')).originalUrl,
+    (await repository.findByShortCode('abc123')).value.originalUrl,
     'https://example.com'
   );
 });
@@ -56,5 +63,8 @@ test('JsonLinkRepository no pierde clicks concurrentes', async (t) => {
     Array.from({ length: 25 }, () => repository.incrementClickCount('abc123'))
   );
 
-  assert.equal((await repository.findByShortCode('abc123')).clickCount, 25);
+  assert.equal(
+    (await repository.findByShortCode('abc123')).value.clickCount,
+    25
+  );
 });

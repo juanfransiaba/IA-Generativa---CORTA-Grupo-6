@@ -1,11 +1,10 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const {
-  InvalidOriginalUrlError,
-  ShortCodeCollisionError,
-  ShortCodeGenerationExhaustedError,
-  ShortLinkNotFoundError
-} = require('../src/domain/errors');
+  FailureReason,
+  failure,
+  success
+} = require('../src/application/result');
 const {
   CreateShortLinkService
 } = require('../src/application/services/create-short-link-service');
@@ -23,26 +22,31 @@ class RepositorySpy {
   }
 
   async save(shortLink) {
-    if (this.links.has(shortLink.shortCode)) throw new ShortCodeCollisionError();
+    if (this.links.has(shortLink.shortCode)) {
+      return failure(FailureReason.SHORT_CODE_COLLISION);
+    }
     this.links.set(shortLink.shortCode, shortLink);
-    return shortLink;
+    return success(shortLink);
   }
 
   async findByShortCode(shortCode) {
-    return this.links.get(shortCode) || null;
+    const shortLink = this.links.get(shortCode);
+    return shortLink
+      ? success(shortLink)
+      : failure(FailureReason.SHORT_LINK_NOT_FOUND);
   }
 
   async incrementClickCount(shortCode) {
     this.incrementedCodes.push(shortCode);
     const current = this.links.get(shortCode);
-    if (!current) return null;
+    if (!current) return failure(FailureReason.SHORT_LINK_NOT_FOUND);
 
     const updated = Object.freeze({
       ...current,
       clickCount: current.clickCount + 1
     });
     this.links.set(shortCode, updated);
-    return updated;
+    return success(updated);
   }
 }
 
@@ -54,8 +58,11 @@ test('CreateShortLinkService normaliza la URL y crea un modelo inmutable', async
     clock: () => new Date('2026-08-18T15:30:00.000Z')
   });
 
-  const created = await service.execute('  https://example.com/ruta  ');
+  const result = await service.execute('  https://example.com/ruta  ');
+  const created = result.value;
 
+  assert.equal(result.ok, true);
+  assert.equal(Object.isFrozen(result), true);
   assert.deepEqual(created, {
     shortCode: 'abc123',
     originalUrl: 'https://example.com/ruta',
@@ -63,7 +70,7 @@ test('CreateShortLinkService normaliza la URL y crea un modelo inmutable', async
     createdAt: '2026-08-18T15:30:00.000Z'
   });
   assert.equal(Object.isFrozen(created), true);
-  assert.strictEqual(await repository.findByShortCode('abc123'), created);
+  assert.strictEqual((await repository.findByShortCode('abc123')).value, created);
 });
 
 test('CreateShortLinkService rechaza URLs que no sean HTTP(S) absolutas', async () => {
@@ -72,7 +79,10 @@ test('CreateShortLinkService rechaza URLs que no sean HTTP(S) absolutas', async 
     shortCodeGenerator: () => 'abc123'
   });
 
-  await assert.rejects(service.execute('ftp://example.com'), InvalidOriginalUrlError);
+  assert.deepEqual(
+    await service.execute('ftp://example.com'),
+    failure(FailureReason.INVALID_ORIGINAL_URL)
+  );
 });
 
 test('CreateShortLinkService reintenta una colisión sin sobrescribir', async () => {
@@ -90,10 +100,12 @@ test('CreateShortLinkService reintenta una colisión sin sobrescribir', async ()
     clock: () => new Date('2026-08-18T15:30:00.000Z')
   });
 
-  const created = await service.execute('https://nuevo.example');
+  const result = await service.execute('https://nuevo.example');
+  const created = result.value;
 
+  assert.equal(result.ok, true);
   assert.equal(created.shortCode, 'disponible');
-  assert.equal((await repository.findByShortCode('ocupado')).clickCount, 4);
+  assert.equal((await repository.findByShortCode('ocupado')).value.clickCount, 4);
 });
 
 test('CreateShortLinkService informa el agotamiento de códigos', async () => {
@@ -105,9 +117,9 @@ test('CreateShortLinkService informa el agotamiento de códigos', async () => {
     maxCodeAttempts: 2
   });
 
-  await assert.rejects(
-    service.execute('https://nuevo.example'),
-    ShortCodeGenerationExhaustedError
+  assert.deepEqual(
+    await service.execute('https://nuevo.example'),
+    failure(FailureReason.SHORT_CODE_GENERATION_EXHAUSTED)
   );
 });
 
@@ -124,7 +136,8 @@ test('GetShortLinkStatisticsService consulta sin incrementar clicks', async () =
 
   const result = await service.execute('abc123');
 
-  assert.strictEqual(result, link);
+  assert.equal(result.ok, true);
+  assert.strictEqual(result.value, link);
   assert.deepEqual(repository.incrementedCodes, []);
 });
 
@@ -133,7 +146,10 @@ test('GetShortLinkStatisticsService informa códigos inexistentes', async () => 
     linkRepository: new RepositorySpy()
   });
 
-  await assert.rejects(service.execute('noexiste'), ShortLinkNotFoundError);
+  assert.deepEqual(
+    await service.execute('noexiste'),
+    failure(FailureReason.SHORT_LINK_NOT_FOUND)
+  );
 });
 
 test('ResolveShortLinkService delega un único incremento atómico', async () => {
@@ -148,7 +164,8 @@ test('ResolveShortLinkService delega un único incremento atómico', async () =>
 
   const result = await service.execute('abc123');
 
-  assert.equal(result.originalUrl, 'https://example.com/destino');
-  assert.equal(result.clickCount, 1);
+  assert.equal(result.ok, true);
+  assert.equal(result.value.originalUrl, 'https://example.com/destino');
+  assert.equal(result.value.clickCount, 1);
   assert.deepEqual(repository.incrementedCodes, ['abc123']);
 });
