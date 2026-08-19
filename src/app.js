@@ -38,6 +38,10 @@ function createApp(options = {}) {
   app.disable('x-powered-by');
   app.use(express.json());
 
+  app.get('/health', (request, response) => {
+    response.json({ status: 'ok' });
+  });
+
   app.post('/api/links', asyncRoute(async (request, response) => {
     const url = parseHttpUrl(request.body?.url);
     if (!url) {
