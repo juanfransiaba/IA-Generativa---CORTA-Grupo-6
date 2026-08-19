@@ -1,5 +1,7 @@
 const path = require('node:path');
-const { assertLinkRepository } = require('../application/ports/link-repository');
+const {
+  assertApplicationDependencies
+} = require('./assert-application-dependencies');
 const {
   CreateShortLinkService
 } = require('../application/services/create-short-link-service');
@@ -9,9 +11,6 @@ const {
 const {
   ResolveShortLinkService
 } = require('../application/services/resolve-short-link-service');
-const {
-  generateRandomShortCode
-} = require('../infrastructure/random/generate-random-short-code');
 const {
   CreateShortLinkController
 } = require('../presentation/http/controllers/create-short-link-controller');
@@ -26,13 +25,18 @@ const { createHttpApp } = require('../presentation/http/create-http-app');
 
 function createApplication({
   linkRepository,
-  shortCodeGenerator = generateRandomShortCode,
-  clock = () => new Date(),
+  shortCodeGenerator,
+  clock,
   maxCodeAttempts = 100,
   publicDirectory = path.join(__dirname, '..', '..', 'public'),
-  logger = console
+  logger
 }) {
-  assertLinkRepository(linkRepository);
+  assertApplicationDependencies({
+    linkRepository,
+    shortCodeGenerator,
+    clock,
+    logger
+  });
 
   const createShortLinkService = new CreateShortLinkService({
     linkRepository,

@@ -1,6 +1,6 @@
 const fileSystem = require('node:fs/promises');
 const path = require('node:path');
-const { ShortCodeCollisionError } = require('../../domain/errors');
+const { FailureReason, failure, success } = require('../../application/result');
 const { toImmutableShortLink } = require('../../domain/short-link');
 
 function normalizePersistedShortLink(record) {
@@ -55,7 +55,9 @@ class JsonLinkRepository {
     const shortLink = (await this.readAll()).find(
       (candidate) => candidate.shortCode === shortCode
     );
-    return shortLink || null;
+    return shortLink
+      ? success(shortLink)
+      : failure(FailureReason.SHORT_LINK_NOT_FOUND);
   }
 
   async save(shortLink) {
@@ -64,11 +66,11 @@ class JsonLinkRepository {
       const codeAlreadyExists = shortLinks.some(
         (candidate) => candidate.shortCode === shortLink.shortCode
       );
-      if (codeAlreadyExists) throw new ShortCodeCollisionError();
+      if (codeAlreadyExists) return failure(FailureReason.SHORT_CODE_COLLISION);
 
       const immutableLink = toImmutableShortLink(shortLink);
       await this.writeAll([...shortLinks, immutableLink]);
-      return immutableLink;
+      return success(immutableLink);
     });
   }
 
@@ -76,7 +78,7 @@ class JsonLinkRepository {
     return this.enqueueMutation(async () => {
       const shortLinks = await this.readAll();
       const matchingLink = shortLinks.find((candidate) => candidate.shortCode === shortCode);
-      if (!matchingLink) return null;
+      if (!matchingLink) return failure(FailureReason.SHORT_LINK_NOT_FOUND);
 
       const updatedLink = toImmutableShortLink({
         ...matchingLink,
@@ -86,7 +88,7 @@ class JsonLinkRepository {
         candidate.shortCode === shortCode ? updatedLink : candidate
       ));
       await this.writeAll(updatedLinks);
-      return updatedLink;
+      return success(updatedLink);
     });
   }
 }

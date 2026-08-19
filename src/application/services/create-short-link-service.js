@@ -1,8 +1,4 @@
-const {
-  InvalidOriginalUrlError,
-  ShortCodeCollisionError,
-  ShortCodeGenerationExhaustedError
-} = require('../../domain/errors');
+const { FailureReason, failure, success } = require('../result');
 const { normalizeOriginalUrl } = require('../../domain/normalize-original-url');
 const { createNewShortLink } = require('../../domain/short-link');
 
@@ -10,14 +6,9 @@ class CreateShortLinkService {
   constructor({
     linkRepository,
     shortCodeGenerator,
-    clock = () => new Date(),
+    clock,
     maxCodeAttempts = 100
   }) {
-    if (!linkRepository) throw new TypeError('Se requiere un linkRepository');
-    if (typeof shortCodeGenerator !== 'function') {
-      throw new TypeError('Se requiere un shortCodeGenerator');
-    }
-
     this.linkRepository = linkRepository;
     this.shortCodeGenerator = shortCodeGenerator;
     this.clock = clock;
@@ -26,7 +17,7 @@ class CreateShortLinkService {
 
   async execute(originalUrlCandidate) {
     const originalUrl = normalizeOriginalUrl(originalUrlCandidate);
-    if (!originalUrl) throw new InvalidOriginalUrlError();
+    if (!originalUrl) return failure(FailureReason.INVALID_ORIGINAL_URL);
 
     for (let attempt = 0; attempt < this.maxCodeAttempts; attempt += 1) {
       const shortLink = createNewShortLink({
@@ -35,15 +26,14 @@ class CreateShortLinkService {
         createdAt: this.clock()
       });
 
-      try {
-        await this.linkRepository.save(shortLink);
-        return shortLink;
-      } catch (error) {
-        if (!(error instanceof ShortCodeCollisionError)) throw error;
+      const persistenceResult = await this.linkRepository.save(shortLink);
+      if (persistenceResult.ok) return success(persistenceResult.value);
+      if (persistenceResult.reason !== FailureReason.SHORT_CODE_COLLISION) {
+        return persistenceResult;
       }
     }
 
-    throw new ShortCodeGenerationExhaustedError();
+    return failure(FailureReason.SHORT_CODE_GENERATION_EXHAUSTED);
   }
 }
 

@@ -3,7 +3,7 @@ function toImmutableShortLink({ shortCode, originalUrl, clickCount, createdAt })
     shortCode,
     originalUrl,
     clickCount: Number(clickCount),
-    createdAt: new Date(createdAt).toISOString()
+    createdAt
   });
 }
 

@@ -18,7 +18,7 @@ composition ─────► presentation
     └────────────► infrastructure ───┘
 ```
 
-- `domain/`: modelo inmutable, normalización y errores de negocio. No conoce otras capas.
+- `domain/`: modelo inmutable y normalización pura. No conoce otras capas.
 - `application/`: casos de uso y el contrato que debe cumplir un repositorio. No conoce
   Express, archivos, PostgreSQL ni variables de entorno.
 - `presentation/`: controllers, presenters, rutas y manejo de errores HTTP. Convierte el
@@ -37,8 +37,15 @@ El modelo interno usa nombres explícitos (`shortCode`, `originalUrl`, `clickCou
 contrato público en español. Los repositories traducen el modelo a JSON o a las columnas
 heredadas de PostgreSQL, por lo que el dominio no depende del formato de persistencia.
 
+Los resultados esperables se representan con un `Result` inmutable: `{ ok: true, value }`
+o `{ ok: false, reason }`. Una URL inválida, un código inexistente o una colisión agotada
+no lanzan excepciones. Las excepciones quedan reservadas para errores de programación o
+fallas inesperadas de infraestructura y se traducen en el borde HTTP.
+
 ## Secretos
 
 La aplicación sólo recibe la conexión mediante `process.env.DATABASE_URL` en el punto de
-entrada. La composición y las capas internas no leen variables globales ni registran el
-valor. Railway resuelve la referencia al servicio PostgreSQL fuera del repositorio.
+entrada. El reloj (que entrega ISO 8601), el generador aleatorio y el logger también se
+inyectan desde `server.js`.
+La composición y las capas internas no leen variables globales ni registran el valor de la
+conexión. Railway resuelve la referencia al servicio PostgreSQL fuera del repositorio.

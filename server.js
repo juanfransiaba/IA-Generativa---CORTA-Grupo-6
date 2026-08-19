@@ -3,6 +3,9 @@ const { createApplication } = require('./src/composition/create-application');
 const {
   createLinkRepository
 } = require('./src/infrastructure/repositories/create-link-repository');
+const {
+  generateRandomShortCode
+} = require('./src/infrastructure/random/generate-random-short-code');
 
 async function main() {
   const dataFile = process.env.DATA_FILE || path.join(__dirname, 'data', 'links.json');
@@ -12,7 +15,12 @@ async function main() {
   });
   await linkRepository.initialize();
 
-  const app = createApplication({ linkRepository });
+  const app = createApplication({
+    linkRepository,
+    shortCodeGenerator: generateRandomShortCode,
+    clock: () => new Date().toISOString(),
+    logger: console
+  });
   const port = Number(process.env.PORT) || 3000;
   const httpServer = app.listen(port, () => {
     console.log(`Corta escuchando en http://localhost:${port}`);
@@ -34,6 +42,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error('No se pudo iniciar Corta:', error);
+  console.error('No se pudo iniciar Corta', { errorType: error.name });
   process.exitCode = 1;
 });

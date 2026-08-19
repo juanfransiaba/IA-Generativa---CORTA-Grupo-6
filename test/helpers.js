@@ -1,5 +1,5 @@
 const { createApplication } = require('../src/composition/create-application');
-const { ShortCodeCollisionError } = require('../src/domain/errors');
+const { FailureReason, failure, success } = require('../src/application/result');
 const { toImmutableShortLink } = require('../src/domain/short-link');
 
 function normalizeTestLink(link) {
@@ -20,27 +20,32 @@ class MemoryLinkRepository {
   async initialize() {}
 
   async save(shortLink) {
-    if (this.links.has(shortLink.shortCode)) throw new ShortCodeCollisionError();
+    if (this.links.has(shortLink.shortCode)) {
+      return failure(FailureReason.SHORT_CODE_COLLISION);
+    }
 
     const immutableLink = toImmutableShortLink(shortLink);
     this.links.set(immutableLink.shortCode, immutableLink);
-    return immutableLink;
+    return success(immutableLink);
   }
 
   async findByShortCode(shortCode) {
-    return this.links.get(shortCode) || null;
+    const shortLink = this.links.get(shortCode);
+    return shortLink
+      ? success(shortLink)
+      : failure(FailureReason.SHORT_LINK_NOT_FOUND);
   }
 
   async incrementClickCount(shortCode) {
     const currentLink = this.links.get(shortCode);
-    if (!currentLink) return null;
+    if (!currentLink) return failure(FailureReason.SHORT_LINK_NOT_FOUND);
 
     const updatedLink = toImmutableShortLink({
       ...currentLink,
       clickCount: currentLink.clickCount + 1
     });
     this.links.set(shortCode, updatedLink);
-    return updatedLink;
+    return success(updatedLink);
   }
 }
 
@@ -50,12 +55,13 @@ async function startTestServer(options = {}) {
   const codes = [...(options.codes || ['abc123'])];
   const shortCodeGenerator = options.shortCodeGenerator
     || (() => codes.shift() || 'abc123');
-  const clock = options.clock || (() => new Date('2026-08-18T15:30:00.000Z'));
+  const clock = options.clock || (() => '2026-08-18T15:30:00.000Z');
   const app = createApplication({
     linkRepository,
     shortCodeGenerator,
     clock,
-    maxCodeAttempts: options.maxCodeAttempts
+    maxCodeAttempts: options.maxCodeAttempts,
+    logger: { error() {} }
   });
 
   await linkRepository.initialize();

@@ -1,14 +1,17 @@
 const { Pool } = require('pg');
-const { ShortCodeCollisionError } = require('../../domain/errors');
+const { FailureReason, failure, success } = require('../../application/result');
 const { toImmutableShortLink } = require('../../domain/short-link');
 
 function normalizeDatabaseRow(row) {
   if (!row) return null;
+  const createdAt = row.creado instanceof Date
+    ? row.creado.toISOString()
+    : new Date(row.creado).toISOString();
   return toImmutableShortLink({
     shortCode: row.codigo,
     originalUrl: row.url,
     clickCount: row.clicks,
-    createdAt: row.creado
+    createdAt
   });
 }
 
@@ -42,9 +45,11 @@ class PostgresLinkRepository {
           shortLink.createdAt
         ]
       );
-      return normalizeDatabaseRow(result.rows[0]);
+      return success(normalizeDatabaseRow(result.rows[0]));
     } catch (error) {
-      if (error.code === '23505') throw new ShortCodeCollisionError();
+      if (error.code === '23505') {
+        return failure(FailureReason.SHORT_CODE_COLLISION);
+      }
       throw error;
     }
   }
@@ -54,7 +59,10 @@ class PostgresLinkRepository {
       'SELECT codigo, url, clicks, creado FROM links WHERE codigo = $1',
       [shortCode]
     );
-    return normalizeDatabaseRow(result.rows[0]);
+    const shortLink = normalizeDatabaseRow(result.rows[0]);
+    return shortLink
+      ? success(shortLink)
+      : failure(FailureReason.SHORT_LINK_NOT_FOUND);
   }
 
   async incrementClickCount(shortCode) {
@@ -65,7 +73,10 @@ class PostgresLinkRepository {
        RETURNING codigo, url, clicks, creado`,
       [shortCode]
     );
-    return normalizeDatabaseRow(result.rows[0]);
+    const shortLink = normalizeDatabaseRow(result.rows[0]);
+    return shortLink
+      ? success(shortLink)
+      : failure(FailureReason.SHORT_LINK_NOT_FOUND);
   }
 
   async close() {

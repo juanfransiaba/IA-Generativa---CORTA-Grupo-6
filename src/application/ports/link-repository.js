@@ -1,19 +1,15 @@
-const REQUIRED_METHODS = Object.freeze([
+const LINK_REPOSITORY_METHODS = Object.freeze([
   'save',
   'findByShortCode',
   'incrementClickCount'
 ]);
 
-function assertLinkRepository(linkRepository) {
-  if (!linkRepository) throw new TypeError('Se requiere un linkRepository');
+/*
+ * Puerto de persistencia consumido por los casos de uso.
+ *
+ * save(shortLink)            -> Result<ShortLink, SHORT_CODE_COLLISION>
+ * findByShortCode(shortCode) -> Result<ShortLink, SHORT_LINK_NOT_FOUND>
+ * incrementClickCount(code)  -> Result<ShortLink, SHORT_LINK_NOT_FOUND>
+ */
 
-  for (const methodName of REQUIRED_METHODS) {
-    if (typeof linkRepository[methodName] !== 'function') {
-      throw new TypeError(`linkRepository debe implementar ${methodName}()`);
-    }
-  }
-
-  return linkRepository;
-}
-
-module.exports = { assertLinkRepository };
+module.exports = { LINK_REPOSITORY_METHODS };

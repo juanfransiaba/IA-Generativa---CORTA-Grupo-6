@@ -1,4 +1,5 @@
 const { presentShortLinkStatistics } = require('../presenters/short-link-presenter');
+const { FailureReason } = require('../../../application/result');
 
 class GetShortLinkStatisticsController {
   constructor({ getShortLinkStatisticsService }) {
@@ -6,10 +7,14 @@ class GetShortLinkStatisticsController {
   }
 
   async handle(request, response) {
-    const shortLink = await this.getShortLinkStatisticsService.execute(
+    const result = await this.getShortLinkStatisticsService.execute(
       request.params.codigo
     );
-    return response.json(presentShortLinkStatistics(shortLink));
+    if (result.ok) return response.json(presentShortLinkStatistics(result.value));
+    if (result.reason === FailureReason.SHORT_LINK_NOT_FOUND) {
+      return response.status(404).json({ error: 'Link no encontrado' });
+    }
+    throw new Error('Resultado inesperado al consultar estadísticas');
   }
 }
 

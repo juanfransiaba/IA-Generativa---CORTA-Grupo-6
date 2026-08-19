@@ -55,7 +55,7 @@ test('CreateShortLinkService normaliza la URL y crea un modelo inmutable', async
   const service = new CreateShortLinkService({
     linkRepository: repository,
     shortCodeGenerator: () => 'abc123',
-    clock: () => new Date('2026-08-18T15:30:00.000Z')
+    clock: () => '2026-08-18T15:30:00.000Z'
   });
 
   const result = await service.execute('  https://example.com/ruta  ');
@@ -97,7 +97,7 @@ test('CreateShortLinkService reintenta una colisión sin sobrescribir', async ()
   const service = new CreateShortLinkService({
     linkRepository: repository,
     shortCodeGenerator: () => codes.shift(),
-    clock: () => new Date('2026-08-18T15:30:00.000Z')
+    clock: () => '2026-08-18T15:30:00.000Z'
   });
 
   const result = await service.execute('https://nuevo.example');
@@ -114,6 +114,7 @@ test('CreateShortLinkService informa el agotamiento de códigos', async () => {
   const service = new CreateShortLinkService({
     linkRepository: repository,
     shortCodeGenerator: () => 'ocupado',
+    clock: () => '2026-08-18T15:30:00.000Z',
     maxCodeAttempts: 2
   });
 
