@@ -131,6 +131,9 @@ test('PostgresLinkRepository incrementa clicks con una sola operación atómica'
 
   assert.match(pool.calls[0].text, /SET clicks = clicks \+ 1/i);
   assert.match(pool.calls[0].text, /RETURNING/i);
+  assert.match(pool.calls[0].text, /WHERE codigo = \$1/i);
+  assert.doesNotMatch(pool.calls[0].text, /abc123/);
+  assert.deepEqual(pool.calls[0].values, ['abc123']);
   assert.equal(updated.ok, true);
   assert.equal(updated.value.clickCount, 4);
   assert.equal(updated.value.createdAt, '2026-08-18T15:30:00.000Z');

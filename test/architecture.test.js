@@ -48,17 +48,17 @@ test('las capas internas no dependen de capas externas', async () => {
   }
 });
 
-test('los services no ejecutan efectos globales ni lanzan resultados esperables', async () => {
-  const servicesDirectory = path.join(SOURCE_DIRECTORY, 'application', 'services');
-  const serviceFiles = await findJavaScriptFiles(servicesDirectory);
+test('la capa application no ejecuta efectos globales ni lanza resultados esperables', async () => {
+  const applicationDirectory = path.join(SOURCE_DIRECTORY, 'application');
+  const applicationFiles = await findJavaScriptFiles(applicationDirectory);
   const forbiddenEffects = /process\.env|console\.|Math\.random|new Date\(\)|\bthrow\b/;
 
-  for (const serviceFile of serviceFiles) {
-    const sourceCode = await fileSystem.readFile(serviceFile, 'utf8');
+  for (const applicationFile of applicationFiles) {
+    const sourceCode = await fileSystem.readFile(applicationFile, 'utf8');
     assert.doesNotMatch(
       sourceCode,
       forbiddenEffects,
-      `${path.basename(serviceFile)} debe delegar efectos y devolver Result`
+      `${path.basename(applicationFile)} debe delegar efectos y devolver Result`
     );
   }
 });
