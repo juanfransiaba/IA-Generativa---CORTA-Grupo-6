@@ -17,6 +17,8 @@
       <button type="submit">Acortar</button>
     </form>
 
+    <p id="crear-error" class="error oculto" role="alert"></p>
+
     <div id="resultado" class="oculto">
       <p>Tu link corto:</p>
       <a id="link-corto" href="#" target="_blank"></a>
@@ -30,20 +32,31 @@
     const form = document.getElementById('form');
     const resultado = document.getElementById('resultado');
     const linkCorto = document.getElementById('link-corto');
+    const crearError = document.getElementById('crear-error');
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const url = document.getElementById('url').value;
-      const res = await fetch('/api/links', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
-      });
-      const data = await res.json();
-      const corta = window.location.origin + data.corta;
-      linkCorto.textContent = corta;
-      linkCorto.href = corta;
-      resultado.classList.remove('oculto');
+      resultado.classList.add('oculto');
+      crearError.classList.add('oculto');
+
+      try {
+        const res = await fetch('/api/links', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo crear el link');
+
+        const corta = window.location.origin + data.corta;
+        linkCorto.textContent = corta;
+        linkCorto.href = corta;
+        resultado.classList.remove('oculto');
+      } catch (error) {
+        crearError.textContent = error.message;
+        crearError.classList.remove('oculto');
+      }
     });
 
     document.getElementById('copiar').addEventListener('click', () => {
